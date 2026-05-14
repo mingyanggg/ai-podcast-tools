@@ -4,59 +4,77 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
 
-const DEMO_TRANSCRIPT = `Episode 158: The Future of AI in Creative Industries
+type Step = 'idle' | 'uploading' | 'transcribing' | 'generating' | 'done' | 'error';
 
-[00:00:15] Sarah: Welcome back to another episode. Today we're diving deep into how AI is reshaping creative work.
-
-[00:01:30] Alex: It's fascinating. We're seeing tools that can generate music, art, code — even writing — at a level that would've seemed impossible five years ago.
-
-[00:03:45] Sarah: The key question isn't whether AI will replace creatives, but how it will amplify them. What do you think?
-
-[00:05:20] Alex: I think the best analogy is the calculator for mathematicians. It didn't kill math — it elevated it. AI will do the same for creative fields.
-
-[00:08:10] Sarah: Let's talk about some specific tools. What are you most excited about right now?
-
-[00:09:30] Alex: For me, it's the transcription and content repurposing space. The ability to take a long-form conversation and instantly generate timestamps, show notes, and social clips is transformative.
-
-[00:12:45] Sarah: Agreed. And that's exactly what we built with AI Podcast Tools — helping podcasters save 3-5 hours per episode.
-
-[00:14:20] Alex: So what does the workflow actually look like?
-
-[00:15:05] Sarah: Upload your audio, wait 2-3 minutes for Whisper to transcribe, then our AI generates timestamps, key takeaways, guest bios, and even suggests the best clips for social media.`;
-
-const DEMO_SHOW_NOTES = {
-  title: 'Episode 158: The Future of AI in Creative Industries',
-  duration: '45:30',
-  timestamp: 'June 12, 2024',
-  keyTakeaways: [
-    'AI amplifies creativity rather than replacing it — the calculator analogy for math applies here',
-    'The biggest productivity gains in podcasts are in transcription and content repurposing',
-    'Saving 3-5 hours per episode is now possible with AI-powered tools',
-  ],
-  guestBio: 'Alex Chen — AI researcher and podcast host of "Future Friction", covering the intersection of technology and creativity.',
-  clips: [
-    { platform: 'Twitter/X', text: 'AI won\'t replace creatives. It\'ll do for art what the calculator did for math. 🎨→📊', duration: '28s' },
-    { platform: 'LinkedIn', text: 'The average podcaster spends 4+ hours per episode on shownotes and clips. We built a way to cut that to minutes.', duration: '45s' },
-  ],
-};
-
-type Step = 'idle' | 'uploading' | 'transcribing' | 'done' | 'error';
+interface ShowNotes {
+  title: string;
+  duration: string;
+  timestamp: string;
+  keyTakeaways: string[];
+  guestBio?: string;
+  clips: { platform: string; text: string; duration: string }[];
+}
 
 export default function TranscribePage() {
   const [step, setStep] = useState<Step>('idle');
   const [dragOver, setDragOver] = useState(false);
   const [fileName, setFileName] = useState('');
   const [copied, setCopied] = useState(false);
-  const [showNotes, setShowNotes] = useState<typeof DEMO_SHOW_NOTES | null>(null);
+  const [transcript, setTranscript] = useState('');
+  const [showNotes, setShowNotes] = useState<ShowNotes | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const simulateProcess = useCallback(async (name: string) => {
-    setFileName(name);
+  const processFile = useCallback(async (file: File) => {
+    setFileName(file.name);
+    setError(null);
     setStep('uploading');
-    await new Promise(r => setTimeout(r, 1200));
-    setStep('transcribing');
-    await new Promise(r => setTimeout(r, 2500));
-    setStep('done');
-    setShowNotes(DEMO_SHOW_NOTES);
+
+    try {
+      // Step 1: Upload + Transcribe
+      const formData = new FormData();
+      formData.append('file', file);
+
+      let transcriptText = '';
+      let showNotesData: ShowNotes | null = null;
+
+      // Upload and transcribe
+      const transcribeRes = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      setStep('transcribing');
+
+      if (!transcribeRes.ok) {
+        const err = await transcribeRes.json();
+        throw new Error(err.error || 'Transcription failed');
+      }
+
+      const transcribeData = await transcribeRes.json();
+      transcriptText = transcribeData.text;
+      setTranscript(transcriptText);
+
+      // Step 2: Generate show notes
+      setStep('generating');
+      const notesRes = await fetch('/api/show-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: transcriptText }),
+      });
+
+      if (!notesRes.ok) {
+        const err = await notesRes.json();
+        throw new Error(err.error || 'Failed to generate show notes');
+      }
+
+      showNotesData = await notesRes.json();
+      setShowNotes(showNotesData);
+      setStep('done');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong';
+      setError(message);
+      setStep('error');
+    }
   }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -64,20 +82,65 @@ export default function TranscribePage() {
     setDragOver(false);
     const file = e.dataTransfer.files[0];
     if (file && (file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|m4a|ogg|flac)$/i))) {
-      simulateProcess(file.name);
+      processFile(file);
     }
-  }, [simulateProcess]);
+  }, [processFile]);
 
   const handleFileInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) simulateProcess(file.name);
-  }, [simulateProcess]);
+    if (file) processFile(file);
+  }, [processFile]);
 
   const copyTranscript = useCallback(() => {
-    navigator.clipboard.writeText(DEMO_TRANSCRIPT);
+    navigator.clipboard.writeText(transcript);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, []);
+  }, [transcript]);
+
+  const downloadAll = useCallback(() => {
+    if (!transcript || !showNotes) return;
+
+    const content = `
+# ${showNotes.title}
+Duration: ${showNotes.duration} | ${showNotes.timestamp}
+
+## Transcript
+${transcript}
+
+## Key Takeaways
+${showNotes.keyTakeaways.map((t) => `- ${t}`).join('\n')}
+
+${showNotes.guestBio ? `## Guest Bio\n${showNotes.guestBio}\n` : ''}
+## Suggested Social Clips
+${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('\n')}
+`.trim();
+
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
+  const getStepLabel = () => {
+    switch (step) {
+      case 'uploading': return 'Uploading...';
+      case 'transcribing': return 'Whisper is transcribing... ~98% accuracy';
+      case 'generating': return 'AI is generating show notes...';
+      default: return '';
+    }
+  };
+
+  const getStepIcon = () => {
+    switch (step) {
+      case 'uploading': return <Upload className="w-5 h-5 text-indigo-400" />;
+      case 'transcribing': return <Mic className="w-5 h-5 text-indigo-400" />;
+      case 'generating': return <Sparkles className="w-5 h-5 text-indigo-400" />;
+      default: return null;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
@@ -109,12 +172,12 @@ export default function TranscribePage() {
             Transcribe Your Podcast<br />in Under 3 Minutes
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Upload any audio file. Whisper transcribes with 98%+ accuracy. 
+            Upload any audio file. Whisper transcribes with 98%+ accuracy.
             Then AI generates timestamps, show notes, and social clips automatically.
           </p>
         </div>
 
-        {/* Upload zone */}
+        {/* Upload zone — idle */}
         {step === 'idle' && (
           <div
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -140,41 +203,32 @@ export default function TranscribePage() {
           </div>
         )}
 
-        {/* Upload progress */}
-        {step === 'uploading' && (
+        {/* Processing state */}
+        {(step === 'uploading' || step === 'transcribing' || step === 'generating') && (
           <div className="border border-slate-700 rounded-2xl p-8 bg-slate-900/70">
             <div className="flex items-center gap-4 mb-4">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
-                <FileAudio className="w-5 h-5 text-indigo-400" />
-              </div>
-              <div>
-                <p className="text-white font-medium">{fileName}</p>
-                <p className="text-slate-500 text-sm">Uploading...</p>
-              </div>
-            </div>
-            <div className="w-full bg-slate-800 rounded-full h-1.5">
-              <div className="bg-indigo-500 h-1.5 rounded-full animate-pulse w-3/4" />
-            </div>
-          </div>
-        )}
-
-        {/* Transcription progress */}
-        {step === 'transcribing' && (
-          <div className="border border-slate-700 rounded-2xl p-8 bg-slate-900/70">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/20 flex items-center justify-center">
-                <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+                {step === 'transcribing'
+                  ? <Loader2 className="w-5 h-5 text-indigo-400 animate-spin" />
+                  : getStepIcon()}
               </div>
               <div>
                 <p className="text-white font-medium">{fileName}</p>
                 <p className="text-indigo-400 text-sm flex items-center gap-1.5">
-                  <Mic className="w-3 h-3" />
-                  Whisper is transcribing... ~98% accuracy
+                  {step === 'transcribing' && <Mic className="w-3 h-3" />}
+                  {step === 'generating' && <Sparkles className="w-3 h-3" />}
+                  {getStepLabel()}
                 </p>
               </div>
             </div>
             <div className="w-full bg-slate-800 rounded-full h-1.5">
-              <div className="bg-indigo-500 h-1.5 rounded-full animate-pulse w-full" />
+              <div
+                className="bg-indigo-500 h-1.5 rounded-full animate-pulse"
+                style={{
+                  width: step === 'uploading' ? '30%' : step === 'transcribing' ? '70%' : '90%',
+                  transition: 'width 0.3s ease',
+                }}
+              />
             </div>
           </div>
         )}
@@ -185,7 +239,7 @@ export default function TranscribePage() {
             {/* Success banner */}
             <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
               <Check className="w-5 h-5 text-emerald-400" />
-              <span className="text-emerald-300 text-sm font-medium">Transcription complete — 98.3% accuracy</span>
+              <span className="text-emerald-300 text-sm font-medium">Transcription complete — ready to use</span>
             </div>
 
             {/* Transcript */}
@@ -194,7 +248,9 @@ export default function TranscribePage() {
                 <div className="flex items-center gap-2">
                   <FileAudio className="w-4 h-4 text-slate-400" />
                   <span className="text-white font-medium">Transcript</span>
-                  <span className="text-slate-500 text-sm">45:30</span>
+                  {showNotes.duration && (
+                    <span className="text-slate-500 text-sm">{showNotes.duration}</span>
+                  )}
                 </div>
                 <button
                   onClick={copyTranscript}
@@ -206,7 +262,7 @@ export default function TranscribePage() {
               </div>
               <div className="px-6 py-5 max-h-80 overflow-y-auto bg-slate-950/50">
                 <pre className="text-slate-300 text-sm whitespace-pre-wrap font-mono leading-relaxed">
-                  {DEMO_TRANSCRIPT}
+                  {transcript}
                 </pre>
               </div>
             </div>
@@ -216,7 +272,7 @@ export default function TranscribePage() {
               <div className="px-6 py-4 bg-slate-900/80 border-b border-slate-700 flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-indigo-400" />
                 <span className="text-white font-medium">AI-Generated Show Notes</span>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">Generated in 8s</span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">Generated in ~8s</span>
               </div>
               <div className="px-6 py-5 space-y-5 bg-slate-950/50">
                 <div>
@@ -236,10 +292,12 @@ export default function TranscribePage() {
                   </ul>
                 </div>
 
-                <div>
-                  <p className="text-slate-400 text-xs uppercase tracking-wider mb-2">Guest Bio</p>
-                  <p className="text-slate-300 text-sm">{showNotes.guestBio}</p>
-                </div>
+                {showNotes.guestBio && (
+                  <div>
+                    <p className="text-slate-400 text-xs uppercase tracking-wider mb-2">Guest Bio</p>
+                    <p className="text-slate-300 text-sm">{showNotes.guestBio}</p>
+                  </div>
+                )}
 
                 <div>
                   <p className="text-slate-400 text-xs uppercase tracking-wider mb-2">Suggested Social Clips</p>
@@ -258,12 +316,20 @@ export default function TranscribePage() {
 
             {/* CTA */}
             <div className="flex items-center justify-center gap-4 pt-4">
-              <button className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition">
+              <button
+                onClick={downloadAll}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition"
+              >
                 <Download className="w-4 h-4" />
                 Download All
               </button>
               <button
-                onClick={() => { setStep('idle'); setShowNotes(null); }}
+                onClick={() => {
+                  setStep('idle');
+                  setShowNotes(null);
+                  setTranscript('');
+                  setError(null);
+                }}
                 className="px-6 py-3 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 text-sm transition"
               >
                 Try Another File
@@ -274,11 +340,21 @@ export default function TranscribePage() {
 
         {/* Error state */}
         {step === 'error' && (
-          <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 border border-red-500/20">
-            <AlertCircle className="w-5 h-5 text-red-400" />
-            <div>
-              <p className="text-red-300 font-medium">Something went wrong</p>
-              <p className="text-red-500/70 text-sm">Please try again or contact support</p>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-red-500/10 border border-red-500/20">
+              <AlertCircle className="w-5 h-5 text-red-400" />
+              <div>
+                <p className="text-red-300 font-medium">Something went wrong</p>
+                <p className="text-red-500/70 text-sm">{error}</p>
+              </div>
+            </div>
+            <div className="flex justify-center">
+              <button
+                onClick={() => { setStep('idle'); setError(null); }}
+                className="px-6 py-3 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 text-sm transition"
+              >
+                Try Again
+              </button>
             </div>
           </div>
         )}

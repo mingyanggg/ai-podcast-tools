@@ -22,7 +22,7 @@
     "openai": "^4.52.7",
     "@stripe/stripe-js": "^4.1.0",
     "stripe": "^16.2.0",
-    "lemonsqueezy.js": "^2.3.0",
+    "@lemonsqueezy/lemonsqueezy.js": "^4.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.4.0",
