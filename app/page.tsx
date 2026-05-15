@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PricingCardCheckout, ProPlanButton } from '@/components/checkout';
 
 const features = [
   {
@@ -161,12 +162,7 @@ export default function HomePage() {
             YouTube, TikTok, and Reels — all from one dashboard. Save 3-5 hours per episode.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/signup"
-              className="rounded-full bg-foreground px-8 py-3 text-base font-medium text-background transition-colors hover:bg-foreground/90"
-            >
-              Start Free — No Credit Card
-            </Link>
+            <ProPlanButton />
             <Link
               href="#features"
               className="rounded-full border border-foreground/20 px-8 py-3 text-base font-medium transition-colors hover:bg-foreground/5"
@@ -299,16 +295,12 @@ export default function HomePage() {
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href="/signup"
-                  className={`rounded-full py-2.5 px-6 text-sm font-medium text-center transition-colors ${
-                    plan.highlight
-                      ? 'bg-background text-foreground hover:bg-background/90'
-                      : 'bg-foreground text-background hover:bg-foreground/90'
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
+                <PricingCardCheckout
+                  planName={plan.name.toLowerCase()}
+                  variantId={plan.name.toLowerCase() === 'free' ? 'free' : plan.name.toLowerCase() === 'pro' ? 'pro-monthly' : 'business'}
+                  cta={plan.cta}
+                  highlight={plan.highlight}
+                />
               </div>
             ))}
           </div>
@@ -383,12 +375,7 @@ export default function HomePage() {
             Join thousands of podcasters who use AI Podcast Tools to save 3-5 hours per episode
             and grow their audience with zero extra effort.
           </p>
-          <Link
-            href="/signup"
-            className="inline-block rounded-full bg-background px-8 py-3 text-foreground font-medium transition-colors hover:bg-background/90"
-          >
-            Get Started Free
-          </Link>
+          <ProPlanButton />
         </div>
       </section>
 
