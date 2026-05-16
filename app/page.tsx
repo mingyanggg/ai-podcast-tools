@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { PricingCardCheckout, ProPlanButton } from '@/components/checkout';
+import { WaitlistBanner } from '@/components/waitlist';
 
 const features = [
   {
@@ -173,6 +174,11 @@ export default function HomePage() {
           <p className="mt-6 text-sm text-muted-foreground">
             Free plan includes 60 min transcription/month · 14-day Pro trial
           </p>
+          {/* Waitlist */}
+          <div className="mt-8 pt-8 border-t border-foreground/10">
+            <p className="text-sm text-muted-foreground mb-3">Get early access &amp; 50% lifetime discount:</p>
+            <WaitlistBanner />
+          </div>
         </div>
       </section>
 
