@@ -2,9 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle, Scissors } from 'lucide-react';
 
-type Step = 'idle' | 'uploading' | 'transcribing' | 'generating' | 'done' | 'error';
+type Step = 'idle' | 'uploading' | 'transcribing' | 'generating' | 'extracting' | 'done' | 'error';
 
 interface ShowNotes {
   title: string;
@@ -15,6 +15,16 @@ interface ShowNotes {
   clips: { platform: string; text: string; duration: string }[];
 }
 
+interface ExtractedClip {
+  id: string;
+  startTime: number;
+  endTime: number;
+  duration: number;
+  text: string;
+  filename: string | null;
+  downloadUrl: string | null;
+}
+
 export default function TranscribePage() {
   const [step, setStep] = useState<Step>('idle');
   const [dragOver, setDragOver] = useState(false);
@@ -22,12 +32,16 @@ export default function TranscribePage() {
   const [copied, setCopied] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [showNotes, setShowNotes] = useState<ShowNotes | null>(null);
+  const [extractedClips, setExtractedClips] = useState<ExtractedClip[]>([]);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const processFile = useCallback(async (file: File) => {
     setFileName(file.name);
     setError(null);
     setStep('uploading');
+    setCurrentFile(file);
+    setExtractedClips([]);
 
     try {
       // Step 1: Upload + Transcribe
@@ -69,6 +83,28 @@ export default function TranscribePage() {
 
       showNotesData = await notesRes.json();
       setShowNotes(showNotesData);
+
+      // Step 3: Extract audio clips
+      setStep('extracting');
+      try {
+        const clipsFormData = new FormData();
+        clipsFormData.append('file', file);
+        clipsFormData.append('transcript', transcriptText);
+
+        const clipsRes = await fetch('/api/clips', {
+          method: 'POST',
+          body: clipsFormData,
+        });
+
+        if (clipsRes.ok) {
+          const clipsData = await clipsRes.json();
+          setExtractedClips(clipsData.clips || []);
+        }
+      } catch {
+        // Clip extraction failed — non-fatal, continue
+        setExtractedClips([]);
+      }
+
       setStep('done');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
@@ -129,6 +165,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
       case 'uploading': return 'Uploading...';
       case 'transcribing': return 'Whisper is transcribing... ~98% accuracy';
       case 'generating': return 'AI is generating show notes...';
+      case 'extracting': return 'Extracting the best audio clips...';
       default: return '';
     }
   };
@@ -138,6 +175,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
       case 'uploading': return <Upload className="w-5 h-5 text-indigo-400" />;
       case 'transcribing': return <Mic className="w-5 h-5 text-indigo-400" />;
       case 'generating': return <Sparkles className="w-5 h-5 text-indigo-400" />;
+      case 'extracting': return <Scissors className="w-5 h-5 text-indigo-400" />;
       default: return null;
     }
   };
@@ -225,7 +263,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
               <div
                 className="bg-indigo-500 h-1.5 rounded-full animate-pulse"
                 style={{
-                  width: step === 'uploading' ? '30%' : step === 'transcribing' ? '70%' : '90%',
+                  width: step === 'uploading' ? '20%' : step === 'transcribing' ? '50%' : step === 'generating' ? '75%' : step === 'extracting' ? '95%' : '100%',
                   transition: 'width 0.3s ease',
                 }}
               />
@@ -329,12 +367,49 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
                   setShowNotes(null);
                   setTranscript('');
                   setError(null);
+                  setExtractedClips([]);
+                  setCurrentFile(null);
                 }}
                 className="px-6 py-3 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 text-sm transition"
               >
                 Try Another File
               </button>
             </div>
+
+            {/* Audio Clips */}
+            {extractedClips.length > 0 && (
+              <div className="border border-slate-700 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 bg-slate-900/80 border-b border-slate-700 flex items-center gap-2">
+                  <Scissors className="w-4 h-4 text-indigo-400" />
+                  <span className="text-white font-medium">Extracted Audio Clips</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">{extractedClips.length} clips</span>
+                </div>
+                <div className="px-6 py-5 space-y-3 bg-slate-950/50">
+                  {extractedClips.map((clip) => (
+                    <div key={clip.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/80 border border-slate-700/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-200 text-sm line-clamp-2">{clip.text}</p>
+                        <p className="text-slate-500 text-xs mt-1">
+                          {Math.floor(clip.duration / 60)}:{String(Math.floor(clip.duration % 60)).padStart(2, '0')} · [{Math.floor(clip.startTime / 60)}:{String(Math.floor(clip.startTime % 60)).padStart(2, '0')} - {Math.floor(clip.endTime / 60)}:{String(Math.floor(clip.endTime % 60)).padStart(2, '0')}]
+                        </p>
+                      </div>
+                      {clip.downloadUrl ? (
+                        <a
+                          href={clip.downloadUrl}
+                          download={clip.filename || `clip-${clip.id}.mp3`}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition shrink-0"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </a>
+                      ) : (
+                        <span className="text-slate-600 text-xs px-3 py-1.5">No file</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
