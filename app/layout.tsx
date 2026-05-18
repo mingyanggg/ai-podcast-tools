@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: '%s | AI Podcast Tools',
   },
   description:
-    'Transform your podcast workflow with AI. Automatic transcription, AI-generated show notes, smart clip extraction, and one-click publishing. Save 3-5 hours per episode.',
+    'Transform your podcast workflow with AI. Automatic transcription, AI-generated show notes, and smart clip extraction.',
   keywords: [
     'AI podcast transcription',
     'podcast show notes generator',

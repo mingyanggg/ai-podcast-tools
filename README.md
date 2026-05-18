@@ -8,7 +8,7 @@ AI-powered podcast production suite: automatic transcription, AI-generated show 
 
 ### Core Features
 
-- **🎙️ Audio Transcription** — Whisper-powered, 98%+ accuracy, supports 15+ languages
+- **🎙️ Audio Transcription** — Whisper-powered transcription, supports 15+ languages
 - **📝 AI Show Notes Generator** — Automatically generate timestamps, summaries, and key takeaways
 - **✂️ Smart Clip Extraction** — AI identifies the best moments for social clips (shorts/reels/tiktok)
 - **📤 One-Click Publishing** — Publish to YouTube, Spotify, Apple Podcasts, and social media simultaneously
@@ -23,7 +23,7 @@ AI-powered podcast production suite: automatic transcription, AI-generated show 
 
 ## Use Cases
 
-- **Podcasters** who want to save 3-5 hours per episode on shownotes and clip creation
+- **Podcasters** who want to automate shownotes and clip creation
 - **Content creators** repurposing long-form podcast content into short-form social media posts
 - **Podcast networks** managing multiple shows at scale
 
@@ -32,8 +32,8 @@ AI-powered podcast production suite: automatic transcription, AI-generated show 
 | Plan | Price | Features |
 |------|-------|----------|
 | Free | $0/mo | 60 min transcription/month |
-| Pro | $19/mo | 10 hours transcription + unlimited clips |
-| Business | $49/mo | Unlimited everything + API access |
+| Pro | $15/mo | 10 hours transcription + unlimited clips |
+| Business | $45/mo | Unlimited everything + API access |
 
 ## Tech Stack
 

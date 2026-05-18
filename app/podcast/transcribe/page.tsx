@@ -163,7 +163,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
   const getStepLabel = () => {
     switch (step) {
       case 'uploading': return 'Uploading...';
-      case 'transcribing': return 'Whisper is transcribing... ~98% accuracy';
+      case 'transcribing': return 'Whisper is transcribing your audio...';
       case 'generating': return 'AI is generating show notes...';
       case 'extracting': return 'Extracting the best audio clips...';
       default: return '';
@@ -210,7 +210,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
             Transcribe Your Podcast<br />in Under 3 Minutes
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Upload any audio file. Whisper transcribes with 98%+ accuracy.
+            Upload any audio file. Whisper transcribes it.
             Then AI generates timestamps, show notes, and social clips automatically.
           </p>
         </div>
@@ -438,7 +438,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
         {step === 'idle' && (
           <div className="mt-12 grid grid-cols-3 gap-4">
             {[
-              { icon: Mic, title: '98%+ Accuracy', desc: 'OpenAI Whisper, 15+ languages' },
+              { icon: Mic, title: 'Whisper AI', desc: 'OpenAI Whisper, 15+ languages' },
               { icon: Sparkles, title: '8-Second AI Gen', desc: 'Timestamps, notes, clips auto' },
               { icon: Download, title: 'Export Everything', desc: 'TXT, SRT, JSON, MD formats' },
             ].map(({ icon: Icon, title, desc }) => (
