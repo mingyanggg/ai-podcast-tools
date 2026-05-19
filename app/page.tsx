@@ -40,7 +40,7 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
-    price: '$5',
+    price: '$15',
     period: '/month',
     description: 'For serious podcasters and content creators',
     features: [
@@ -55,7 +55,7 @@ const pricingPlans = [
   },
   {
     name: 'Business',
-    price: '$5',
+    price: '$45',
     period: '/month',
     description: 'For podcast networks and production teams',
     features: [
@@ -77,7 +77,7 @@ const faqs = [
   },
   {
     q: 'What podcast hosts do you integrate with?',
-    a: 'We support RSS import from any podcast host. Direct integrations with Spotify for Podcasters, Apple Podcasts Connect, and YouTube are coming soon.',
+    a: 'We support exporting transcripts and show notes in formats ready to paste into any podcast host. Direct integrations are on our roadmap.',
   },
   {
     q: 'Can I use this for interview podcasts?',
@@ -231,8 +231,8 @@ export default function HomePage() {
               },
               {
                 step: '03',
-                title: 'Publish Everywhere',
-                desc: 'One-click publish to YouTube, Spotify, Apple Podcasts, and social media. Or export and publish manually.',
+                title: 'Export & Publish',
+                desc: 'Download your show notes, timestamps, and social clips — ready to paste into your podcast host or share on social media.',
               },
             ].map((item) => (
               <div key={item.step} className="text-center">
