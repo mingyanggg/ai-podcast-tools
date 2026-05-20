@@ -65,6 +65,14 @@ export default function TranscribePage() {
       }
 
       const transcribeData = await transcribeRes.json();
+
+      // Handle quota exceeded
+      if (transcribeRes.status === 403 || transcribeData.error?.includes('limit')) {
+        throw new Error(
+          `Monthly limit reached (${transcribeData.limitMinutes} min). Upgrade to unlock more: https://aitoolsfactory.com/podcast-tools#pricing`
+        );
+      }
+
       transcriptText = transcribeData.text;
       setTranscript(transcriptText);
 
