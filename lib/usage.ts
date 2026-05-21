@@ -16,11 +16,52 @@ export const PLAN_LIMITS: Record<Plan, number> = {
   business: 999999,
 };
 
-/** Get the plan from a user ID via Supabase Auth metadata or DB lookup */
-export async function getUserPlan(_userId: string): Promise<Plan> {
-  // TODO: look up user plan from users table in Supabase
-  // For now, default to free so the enforcement is active
-  return 'free';
+interface UsageRecord {
+  user_id: string;
+  month: string;
+  total_seconds: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Get the plan from a user ID via Supabase users table lookup */
+export async function getUserPlan(userId: string): Promise<Plan> {
+  try {
+    const { serviceRoleClient } = await import('@/lib/supabase/client');
+
+    if (!serviceRoleClient) {
+      console.warn('[getUserPlan] serviceRoleClient not available, defaulting to free');
+      return 'free';
+    }
+
+    // First get the user's email from auth, then look up subscription tier by email
+    const { supabase } = await import('@/lib/supabase/client');
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user?.email) {
+      return 'free';
+    }
+
+    const { data, error } = await serviceRoleClient
+      .from('users')
+      .select('subscription_tier')
+      .eq('email', user.email)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[getUserPlan] Error fetching user plan:', error);
+      return 'free';
+    }
+
+    if (!data) {
+      return 'free';
+    }
+
+    return data.subscription_tier as Plan;
+  } catch (err) {
+    console.error('[getUserPlan] Unexpected error:', err);
+    return 'free';
+  }
 }
 
 /**
@@ -69,14 +110,17 @@ export async function recordUsage(userId: string, audioDurationSeconds: number):
   const monthStart = getMonthStart();
   const monthEnd = getMonthEnd();
 
-  // Upsert usage record for this user this month
-  const { error } = await supabase.from('usage_records').upsert(
-    {
-      user_id: userId,
-      month: monthStart,
-      total_seconds: audioDurationSeconds,
-      updated_at: new Date().toISOString(),
-    },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
+  const { error } = await sb.from('usage_records').upsert(
+    [
+      {
+        user_id: userId,
+        month: monthStart,
+        total_seconds: audioDurationSeconds,
+        updated_at: new Date().toISOString(),
+      },
+    ],
     {
       onConflict: 'user_id,month',
     }
@@ -92,9 +136,11 @@ export async function recordUsage(userId: string, audioDurationSeconds: number):
 export async function getCurrentMonthUsage(userId: string): Promise<number> {
   const { supabase } = await import('@/lib/supabase/client');
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any;
   const monthStart = getMonthStart();
 
-  const { data, error } = await supabase
+  const { data, error } = await sb
     .from('usage_records')
     .select('total_seconds')
     .eq('user_id', userId)
