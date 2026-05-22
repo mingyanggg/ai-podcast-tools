@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Mic, Upload, FileAudio, Sparkles, LogOut, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Mic, Upload, FileAudio, Sparkles, LogOut, Clock, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
 interface RecentTask {
@@ -95,22 +95,41 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        {/* Quick action */}
-        <div className="rounded-2xl bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/20 p-8 text-center">
-          <div className="w-16 h-16 rounded-2xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-4">
-            <Upload className="w-8 h-8 text-indigo-400" />
+        {/* Quick actions */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-2xl bg-gradient-to-r from-indigo-600/20 to-purple-600/20 border border-indigo-500/20 p-6 text-center">
+            <div className="w-12 h-12 rounded-xl bg-indigo-500/20 flex items-center justify-center mx-auto mb-3">
+              <Upload className="w-6 h-6 text-indigo-400" />
+            </div>
+            <h2 className="text-lg font-bold text-white mb-2">Transcribe & Create</h2>
+            <p className="text-slate-400 text-xs mb-4">
+              Upload audio and get AI show notes, timestamps, and social clips.
+            </p>
+            <Link
+              href="/podcast/transcribe"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs transition"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              Start Transcribing
+            </Link>
           </div>
-          <h2 className="text-xl font-bold text-white mb-2">Ready to transcribe?</h2>
-          <p className="text-slate-400 text-sm mb-6 max-w-md mx-auto">
-            Upload your first podcast episode and get AI-generated show notes, timestamps, and social clips in minutes.
-          </p>
-          <Link
-            href="/podcast/transcribe"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition"
-          >
-            <Upload className="w-4 h-4" />
-            Start Transcribing
-          </Link>
+
+          <div className="rounded-2xl bg-gradient-to-r from-amber-600/15 to-orange-600/15 border border-amber-500/20 p-6 text-center">
+            <div className="w-12 h-12 rounded-xl bg-amber-500/20 flex items-center justify-center mx-auto mb-3">
+              <Search className="w-6 h-6 text-amber-400" />
+            </div>
+            <h2 className="text-lg font-bold text-white mb-2">Boost Discoverability</h2>
+            <p className="text-slate-400 text-xs mb-4">
+              Optimize titles, descriptions, and tags for Apple Podcasts & Spotify.
+            </p>
+            <Link
+              href="/podcast/seo"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium text-xs transition"
+            >
+              <Search className="w-3.5 h-3.5" />
+              SEO Optimizer
+            </Link>
+          </div>
         </div>
 
         {/* Recent tasks */}
