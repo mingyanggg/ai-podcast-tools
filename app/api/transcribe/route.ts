@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { transcribeAudio } from '@/lib/ai/whisper';
 import { checkQuota, recordUsage } from '@/lib/usage';
-import { getCurrentUser } from '@/lib/supabase/server';
+import { getCurrentUser, uploadAudio, saveTranscription } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
-export const maxDuration = 60; // 60 seconds for large files
+export const maxDuration = 120; // 120 seconds for large files
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,7 +36,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Estimate audio duration from file size (rough: 1MB ≈ 1 min for MP3 at 128kbps)
-    // More accurate duration will be known after transcription
     const estimatedDurationSeconds = Math.ceil((file.size / (128 * 1024 / 8)) * 60);
 
     // Check authentication and quota
@@ -61,15 +60,37 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Upload audio to Supabase Storage (before transcription so we have the URL ready)
+    let audioUrl = '';
+    if (user) {
+      const uploadedUrl = await uploadAudio(user.id, buffer, file.name, file.type);
+      if (uploadedUrl) {
+        audioUrl = uploadedUrl;
+      }
+    }
+
     // Transcribe
     const result = await transcribeAudio(buffer, file.name);
+    const actualDuration = result.duration ?? estimatedDurationSeconds;
 
     // Record usage after successful transcription
-    const actualDuration = result.duration ?? estimatedDurationSeconds;
     if (user) {
       await recordUsage(user.id, actualDuration).catch((err) => {
         console.error('[Usage Record Failed]', err);
       });
+
+      // Persist transcription to database
+      if (audioUrl) {
+        await saveTranscription({
+          userId: user.id,
+          audioUrl,
+          transcriptText: result.text,
+          durationSeconds: actualDuration,
+          language: result.language,
+        }).catch((err) => {
+          console.error('[Save Transcription Failed]', err);
+        });
+      }
     }
 
     return NextResponse.json({

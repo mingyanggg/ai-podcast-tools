@@ -1,30 +1,69 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Mic, Upload, FileAudio, Sparkles, LogOut, Clock, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase/client';
 
-interface RecentTask {
+interface TranscriptionRecord {
   id: string;
-  filename: string;
-  duration: string;
-  date: string;
-  status: 'done' | 'processing' | 'error';
-  type: 'transcribe' | 'show_notes' | 'clips';
+  audio_url: string;
+  duration_seconds: number | null;
+  created_at: string;
+  status: 'completed' | 'processing' | 'failed';
 }
 
 export default function DashboardPage() {
   const router = useRouter();
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [usedMinutes, setUsedMinutes] = useState(0);
+  const [taskCount, setTaskCount] = useState(0);
+  const [recentTasks, setRecentTasks] = useState<TranscriptionRecord[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Get user on mount
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUserEmail(data.user?.email ?? null);
-    });
+  const loadDashboardData = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    setUserEmail(user.email ?? null);
+
+    // Load recent transcriptions from the database
+    const { data: transcriptions } = await (supabase as any)
+      .from('transcriptions')
+      .select('id, audio_url, duration_seconds, created_at, status')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (transcriptions) {
+      setRecentTasks(transcriptions as TranscriptionRecord[]);
+      setTaskCount(transcriptions.filter((t) => t.status === 'completed').length);
+    }
+
+    // Calculate used minutes from usage_records
+    const now = new Date();
+    const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+    const { data: usageData } = await (supabase as any)
+      .from('usage_records')
+      .select('total_seconds')
+      .eq('user_id', user.id)
+      .eq('month', monthStart)
+      .single();
+
+    if (usageData) {
+      setUsedMinutes(Math.ceil((usageData.total_seconds || 0) / 60));
+    }
+
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -32,7 +71,17 @@ export default function DashboardPage() {
     router.refresh();
   };
 
-  const recentTasks: RecentTask[] = [];
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return '—';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}m ${secs}s`;
+  };
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950">
@@ -68,14 +117,16 @@ export default function DashboardPage() {
         {/* Page header */}
         <div>
           <h1 className="text-3xl font-bold text-white mb-2">Your Dashboard</h1>
-          <p className="text-slate-400">Manage your podcast transcriptions and content</p>
+          <p className="text-slate-400">
+            {userEmail ? `Managing ${userEmail}` : 'Manage your podcast transcriptions and content'}
+          </p>
         </div>
 
         {/* Quick stats */}
         <div className="grid grid-cols-3 gap-4">
           {[
-            { label: 'Transcription Used', value: '0 min', sub: '60 min included', icon: Mic, color: 'indigo' },
-            { label: 'This Month', value: '0 tasks', sub: '0 completed', icon: CheckCircle2, color: 'emerald' },
+            { label: 'Transcription Used', value: `${usedMinutes} min`, sub: '60 min included', icon: Mic, color: 'indigo' },
+            { label: 'This Month', value: `${taskCount} tasks`, sub: `${taskCount} completed`, icon: CheckCircle2, color: 'emerald' },
             { label: 'Queue', value: '0 pending', sub: 'All clear', icon: Clock, color: 'amber' },
           ].map(stat => (
             <div key={stat.label} className="rounded-xl bg-slate-900/80 border border-slate-800/70 p-5">
@@ -89,7 +140,7 @@ export default function DashboardPage() {
                 </div>
                 <span className="text-slate-500 text-xs">{stat.label}</span>
               </div>
-              <p className="text-2xl font-bold text-white">{stat.value}</p>
+              <p className="text-2xl font-bold text-white">{loading ? '—' : stat.value}</p>
               <p className="text-xs text-slate-500 mt-0.5">{stat.sub}</p>
             </div>
           ))}
@@ -138,7 +189,7 @@ export default function DashboardPage() {
             <Clock className="w-4 h-4 text-slate-400" />
             Recent Tasks
           </h2>
-          {recentTasks.length === 0 ? (
+          {!loading && recentTasks.length === 0 ? (
             <div className="rounded-xl bg-slate-900/60 border border-slate-800/50 p-8 text-center">
               <FileAudio className="w-8 h-8 text-slate-600 mx-auto mb-3" />
               <p className="text-slate-400 mb-1">No transcriptions yet</p>
@@ -151,16 +202,20 @@ export default function DashboardPage() {
                   <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
                     <FileAudio className="w-5 h-5 text-slate-400" />
                   </div>
-                  <div className="flex-1">
-                    <p className="text-white text-sm font-medium">{task.filename}</p>
-                    <p className="text-slate-500 text-xs">{task.duration} · {task.date}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">
+                      {task.audio_url ? task.audio_url.split('/').pop()?.replace(/^\d+\./, '') ?? 'Transcription' : 'Transcription'}
+                    </p>
+                    <p className="text-slate-500 text-xs">
+                      {formatDuration(task.duration_seconds)} · {formatDate(task.created_at)}
+                    </p>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${
-                    task.status === 'done' ? 'bg-emerald-500/20 text-emerald-400' :
+                    task.status === 'completed' ? 'bg-emerald-500/20 text-emerald-400' :
                     task.status === 'processing' ? 'bg-amber-500/20 text-amber-400' :
                     'bg-red-500/20 text-red-400'
                   }`}>
-                    {task.status === 'done' ? 'Done' : task.status === 'processing' ? 'Processing' : 'Error'}
+                    {task.status === 'completed' ? 'Done' : task.status === 'processing' ? 'Processing' : 'Error'}
                   </span>
                 </div>
               ))}
