@@ -2,9 +2,9 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle } from 'lucide-react';
+import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle, Scissors, FileText, ClosedCaptioning, FileJson } from 'lucide-react';
 
-type Step = 'idle' | 'uploading' | 'transcribing' | 'generating' | 'done' | 'error';
+type Step = 'idle' | 'uploading' | 'transcribing' | 'generating' | 'extracting' | 'done' | 'error';
 
 interface ShowNotes {
   title: string;
@@ -15,6 +15,16 @@ interface ShowNotes {
   clips: { platform: string; text: string; duration: string }[];
 }
 
+interface ExtractedClip {
+  id: string;
+  startTime: number;
+  endTime: number;
+  duration: number;
+  text: string;
+  filename: string | null;
+  downloadUrl: string | null;
+}
+
 export default function TranscribePage() {
   const [step, setStep] = useState<Step>('idle');
   const [dragOver, setDragOver] = useState(false);
@@ -22,12 +32,16 @@ export default function TranscribePage() {
   const [copied, setCopied] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [showNotes, setShowNotes] = useState<ShowNotes | null>(null);
+  const [extractedClips, setExtractedClips] = useState<ExtractedClip[]>([]);
+  const [currentFile, setCurrentFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const processFile = useCallback(async (file: File) => {
     setFileName(file.name);
     setError(null);
     setStep('uploading');
+    setCurrentFile(file);
+    setExtractedClips([]);
 
     try {
       // Step 1: Upload + Transcribe
@@ -51,6 +65,14 @@ export default function TranscribePage() {
       }
 
       const transcribeData = await transcribeRes.json();
+
+      // Handle quota exceeded
+      if (transcribeRes.status === 403 || transcribeData.error?.includes('limit')) {
+        throw new Error(
+          `Monthly limit reached (${transcribeData.limitMinutes} min). Upgrade to unlock more: https://aitoolsfactory.com/podcast-tools#pricing`
+        );
+      }
+
       transcriptText = transcribeData.text;
       setTranscript(transcriptText);
 
@@ -69,6 +91,28 @@ export default function TranscribePage() {
 
       showNotesData = await notesRes.json();
       setShowNotes(showNotesData);
+
+      // Step 3: Extract audio clips
+      setStep('extracting');
+      try {
+        const clipsFormData = new FormData();
+        clipsFormData.append('file', file);
+        clipsFormData.append('transcript', transcriptText);
+
+        const clipsRes = await fetch('/api/clips', {
+          method: 'POST',
+          body: clipsFormData,
+        });
+
+        if (clipsRes.ok) {
+          const clipsData = await clipsRes.json();
+          setExtractedClips(clipsData.clips || []);
+        }
+      } catch {
+        // Clip extraction failed — non-fatal, continue
+        setExtractedClips([]);
+      }
+
       setStep('done');
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
@@ -124,11 +168,71 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
     URL.revokeObjectURL(url);
   }, [transcript, showNotes]);
 
+  const downloadTXT = useCallback(() => {
+    if (!transcript) return;
+    const blob = new Blob([transcript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes?.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'transcript'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
+  const downloadSRT = useCallback(() => {
+    // Parse transcript into SRT format: sequential numbered blocks with timestamp
+    // Each block: index, timestamp (00:00:00 --> 00:00:00), text
+    // Use the transcript text split by sentences/paragraphs
+    if (!transcript) return;
+    const lines = transcript.split('\n').filter(l => l.trim());
+    let srtContent = '';
+    lines.forEach((line, i) => {
+      const startSec = i * 30; // 30s per block as placeholder
+      const endSec = startSec + 30;
+      const toSRTTime = (s: number) => {
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+      };
+      srtContent += `${i + 1}\n${toSRTTime(startSec)} --> ${toSRTTime(endSec)}\n${line}\n\n`;
+    });
+    const blob = new Blob([srtContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes?.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'transcript'}.srt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
+  const downloadJSON = useCallback(() => {
+    if (!transcript || !showNotes) return;
+    const data = {
+      title: showNotes.title,
+      duration: showNotes.duration,
+      timestamp: showNotes.timestamp,
+      transcript,
+      keyTakeaways: showNotes.keyTakeaways,
+      guestBio: showNotes.guestBio,
+      clips: showNotes.clips,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'transcript'}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
   const getStepLabel = () => {
     switch (step) {
       case 'uploading': return 'Uploading...';
-      case 'transcribing': return 'Whisper is transcribing... ~98% accuracy';
+      case 'transcribing': return 'Whisper is transcribing your audio...';
       case 'generating': return 'AI is generating show notes...';
+      case 'extracting': return 'Extracting the best audio clips...';
       default: return '';
     }
   };
@@ -138,6 +242,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
       case 'uploading': return <Upload className="w-5 h-5 text-indigo-400" />;
       case 'transcribing': return <Mic className="w-5 h-5 text-indigo-400" />;
       case 'generating': return <Sparkles className="w-5 h-5 text-indigo-400" />;
+      case 'extracting': return <Scissors className="w-5 h-5 text-indigo-400" />;
       default: return null;
     }
   };
@@ -172,7 +277,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
             Transcribe Your Podcast<br />in Under 3 Minutes
           </h1>
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-            Upload any audio file. Whisper transcribes with 98%+ accuracy.
+            Upload any audio file. Whisper transcribes it.
             Then AI generates timestamps, show notes, and social clips automatically.
           </p>
         </div>
@@ -225,7 +330,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
               <div
                 className="bg-indigo-500 h-1.5 rounded-full animate-pulse"
                 style={{
-                  width: step === 'uploading' ? '30%' : step === 'transcribing' ? '70%' : '90%',
+                  width: step === 'uploading' ? '20%' : step === 'transcribing' ? '50%' : step === 'generating' ? '75%' : step === 'extracting' ? '95%' : '100%',
                   transition: 'width 0.3s ease',
                 }}
               />
@@ -329,12 +434,83 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
                   setShowNotes(null);
                   setTranscript('');
                   setError(null);
+                  setExtractedClips([]);
+                  setCurrentFile(null);
                 }}
                 className="px-6 py-3 rounded-xl border border-slate-700 hover:border-slate-600 text-slate-300 text-sm transition"
               >
                 Try Another File
               </button>
             </div>
+
+            {/* Export panel */}
+            {transcript && (
+              <div className="border border-slate-700 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 bg-slate-900/80 border-b border-slate-700 flex items-center gap-2">
+                  <Download className="w-4 h-4 text-indigo-400" />
+                  <span className="text-white font-medium">Export Results</span>
+                  <span className="text-xs text-slate-500 ml-auto">TXT · SRT · JSON</span>
+                </div>
+                <div className="px-6 py-5">
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: 'TXT', desc: 'Plain text transcript', icon: FileText, fn: downloadTXT },
+                      { label: 'SRT', desc: 'Subtitles for video', icon: ClosedCaptioning, fn: downloadSRT },
+                      { label: 'JSON', desc: 'Structured data', icon: FileJson, fn: downloadJSON },
+                    ].map(({ label, desc, icon: Icon, fn }) => (
+                      <button
+                        key={label}
+                        onClick={fn}
+                        className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/80 border border-slate-700/50 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition group"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-slate-800 group-hover:bg-indigo-500/20 flex items-center justify-center transition">
+                          <Icon className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-white text-sm font-medium">{label}</p>
+                          <p className="text-slate-500 text-xs">{desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Audio Clips */}
+            {extractedClips.length > 0 && (
+              <div className="border border-slate-700 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 bg-slate-900/80 border-b border-slate-700 flex items-center gap-2">
+                  <Scissors className="w-4 h-4 text-indigo-400" />
+                  <span className="text-white font-medium">Extracted Audio Clips</span>
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400">{extractedClips.length} clips</span>
+                </div>
+                <div className="px-6 py-5 space-y-3 bg-slate-950/50">
+                  {extractedClips.map((clip) => (
+                    <div key={clip.id} className="flex items-center gap-3 p-3 rounded-lg bg-slate-900/80 border border-slate-700/50">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-slate-200 text-sm line-clamp-2">{clip.text}</p>
+                        <p className="text-slate-500 text-xs mt-1">
+                          {Math.floor(clip.duration / 60)}:{String(Math.floor(clip.duration % 60)).padStart(2, '0')} · [{Math.floor(clip.startTime / 60)}:{String(Math.floor(clip.startTime % 60)).padStart(2, '0')} - {Math.floor(clip.endTime / 60)}:{String(Math.floor(clip.endTime % 60)).padStart(2, '0')}]
+                        </p>
+                      </div>
+                      {clip.downloadUrl ? (
+                        <a
+                          href={clip.downloadUrl}
+                          download={clip.filename || `clip-${clip.id}.mp3`}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition shrink-0"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </a>
+                      ) : (
+                        <span className="text-slate-600 text-xs px-3 py-1.5">No file</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -363,7 +539,7 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
         {step === 'idle' && (
           <div className="mt-12 grid grid-cols-3 gap-4">
             {[
-              { icon: Mic, title: '98%+ Accuracy', desc: 'OpenAI Whisper, 15+ languages' },
+              { icon: Mic, title: 'Whisper AI', desc: 'OpenAI Whisper, 15+ languages' },
               { icon: Sparkles, title: '8-Second AI Gen', desc: 'Timestamps, notes, clips auto' },
               { icon: Download, title: 'Export Everything', desc: 'TXT, SRT, JSON, MD formats' },
             ].map(({ icon: Icon, title, desc }) => (

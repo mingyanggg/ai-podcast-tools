@@ -21,12 +21,6 @@ const features = [
       'AI identifies the best 30-60s moments for YouTube Shorts, TikTok, and Reels. No manual scrubbing through hours of audio.',
     icon: '✂️',
   },
-  {
-    title: 'One-Click Multi-Platform Publish',
-    description:
-      'Publish transcripts, clips, and show notes to YouTube, Spotify, Apple Podcasts, and Twitter simultaneously.',
-    icon: '📤',
-  },
 ];
 
 const pricingPlans = [
@@ -46,7 +40,7 @@ const pricingPlans = [
   },
   {
     name: 'Pro',
-    price: '$19',
+    price: '$15',
     period: '/month',
     description: 'For serious podcasters and content creators',
     features: [
@@ -54,7 +48,6 @@ const pricingPlans = [
       'Full show notes + timestamps',
       'Unlimited social clips',
       '15+ languages',
-      'Multi-platform publishing',
       'Priority processing',
     ],
     cta: 'Start Free Trial',
@@ -62,16 +55,15 @@ const pricingPlans = [
   },
   {
     name: 'Business',
-    price: '$49',
+    price: '$45',
     period: '/month',
     description: 'For podcast networks and production teams',
     features: [
       'Unlimited transcription',
-      'Unlimited everything',
+      'Everything in Pro',
       'API access',
       'White-label transcripts',
-      'Team collaboration',
-      'Dedicated support',
+      'Priority support',
     ],
     cta: 'Contact Sales',
     highlight: false,
@@ -81,11 +73,11 @@ const pricingPlans = [
 const faqs = [
   {
     q: 'How accurate is the transcription?',
-    a: 'Our Whisper-based engine achieves 98%+ accuracy on clear English audio. Multi-speaker and accented audio are supported with speaker diarization to label different voices.',
+    a: 'We use OpenAI Whisper, the same model powering transcription services worldwide. Try it free and judge the quality yourself — we believe in letting results speak.',
   },
   {
     q: 'What podcast hosts do you integrate with?',
-    a: 'We support RSS import from any podcast host. Direct integrations with Spotify for Podcasters, Apple Podcasts Connect, and YouTube are coming soon.',
+    a: 'We support exporting transcripts and show notes in formats ready to paste into any podcast host. Direct integrations are on our roadmap.',
   },
   {
     q: 'Can I use this for interview podcasts?',
@@ -106,10 +98,10 @@ const faqs = [
 ];
 
 const socialProof = [
-  { metric: '3-5 hrs', label: 'saved per episode on show notes' },
-  { metric: '98%+', label: 'transcription accuracy' },
+  { metric: '<10 min', label: 'for a 1-hour episode' },
+  { metric: '3 clips', label: 'AI-extracted per episode on average' },
   { metric: '15+', label: 'languages supported' },
-  { metric: '10K+', label: 'podcasters already using it' },
+  { metric: 'Free', label: '60 min/month to start' },
 ];
 
 export default function HomePage() {
@@ -152,15 +144,12 @@ export default function HomePage() {
       {/* Hero */}
       <section className="py-24 md:py-32">
         <div className="container mx-auto px-4 text-center">
-          <div className="inline-block rounded-full bg-foreground/5 px-3 py-1 text-sm text-foreground/70 mb-6">
-            Trusted by 10,000+ podcasters worldwide
-          </div>
           <h1 className="text-4xl md:text-6xl font-bold tracking-tight mb-6 max-w-3xl mx-auto">
-            Turn Your Podcast Episodes Into Content Machines
+            Turn a 1-hour podcast into full show notes in 5 minutes
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto mb-10">
-            Transcribe in seconds. Generate show notes automatically. Extract viral clips for
-            YouTube, TikTok, and Reels — all from one dashboard. Save 3-5 hours per episode.
+            Whisper-powered transcription with AI show notes and smart clip extraction.
+            Free to start — no credit card required.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <ProPlanButton />
@@ -207,7 +196,7 @@ export default function HomePage() {
               From raw audio to full content strategy — in minutes, not hours
             </p>
           </div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto">
             {features.map((f) => (
               <div
                 key={f.title}
@@ -242,8 +231,8 @@ export default function HomePage() {
               },
               {
                 step: '03',
-                title: 'Publish Everywhere',
-                desc: 'One-click publish to YouTube, Spotify, Apple Podcasts, and social media. Or export and publish manually.',
+                title: 'Export & Publish',
+                desc: 'Download your show notes, timestamps, and social clips — ready to paste into your podcast host or share on social media.',
               },
             ].map((item) => (
               <div key={item.step} className="text-center">
@@ -332,7 +321,7 @@ export default function HomePage() {
               </thead>
               <tbody>
                 {[
-                  ['Transcription accuracy', '97%', '98%+'],
+                  ['Transcription accuracy', '97%', '~90%'],
                   ['Languages supported', '5', '15+'],
                   ['Social clip generation', 'Basic', 'AI-powered extraction'],
                   ['Multi-platform publish', 'No', 'Yes'],
@@ -378,8 +367,7 @@ export default function HomePage() {
             Stop Spending Hours on Show Notes
           </h2>
           <p className="text-background/70 max-w-xl mx-auto mb-8">
-            Join thousands of podcasters who use AI Podcast Tools to save 3-5 hours per episode
-            and grow their audience with zero extra effort.
+            Join the beta — transcribe your first episode free
           </p>
           <ProPlanButton />
         </div>
@@ -389,7 +377,7 @@ export default function HomePage() {
       <footer className="border-t py-8">
         <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="text-sm text-muted-foreground">
-            © 2025 AI Podcast Tools. All rights reserved.
+            © 2026 AI Podcast Tools. All rights reserved.
           </div>
           <div className="flex gap-6">
             <a href="#" className="text-sm text-muted-foreground hover:text-foreground">Privacy</a>
