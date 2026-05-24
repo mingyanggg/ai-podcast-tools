@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle, Scissors } from 'lucide-react';
+import { Mic, Upload, FileAudio, Sparkles, Download, Copy, Check, Loader2, AlertCircle, Scissors, FileText, ClosedCaptioning, FileJson } from 'lucide-react';
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'generating' | 'extracting' | 'done' | 'error';
 
@@ -164,6 +164,65 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
     const a = document.createElement('a');
     a.href = url;
     a.download = `${showNotes.title.replace(/[^a-z0-9]/gi, '-').toLowerCase()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
+  const downloadTXT = useCallback(() => {
+    if (!transcript) return;
+    const blob = new Blob([transcript], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes?.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'transcript'}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
+  const downloadSRT = useCallback(() => {
+    // Parse transcript into SRT format: sequential numbered blocks with timestamp
+    // Each block: index, timestamp (00:00:00 --> 00:00:00), text
+    // Use the transcript text split by sentences/paragraphs
+    if (!transcript) return;
+    const lines = transcript.split('\n').filter(l => l.trim());
+    let srtContent = '';
+    lines.forEach((line, i) => {
+      const startSec = i * 30; // 30s per block as placeholder
+      const endSec = startSec + 30;
+      const toSRTTime = (s: number) => {
+        const h = Math.floor(s / 3600);
+        const m = Math.floor((s % 3600) / 60);
+        const sec = s % 60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+      };
+      srtContent += `${i + 1}\n${toSRTTime(startSec)} --> ${toSRTTime(endSec)}\n${line}\n\n`;
+    });
+    const blob = new Blob([srtContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes?.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'transcript'}.srt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [transcript, showNotes]);
+
+  const downloadJSON = useCallback(() => {
+    if (!transcript || !showNotes) return;
+    const data = {
+      title: showNotes.title,
+      duration: showNotes.duration,
+      timestamp: showNotes.timestamp,
+      transcript,
+      keyTakeaways: showNotes.keyTakeaways,
+      guestBio: showNotes.guestBio,
+      clips: showNotes.clips,
+      exportedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${showNotes.title.replace(/[^a-z0-9]/gi, '-').toLowerCase() ?? 'transcript'}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }, [transcript, showNotes]);
@@ -383,6 +442,40 @@ ${showNotes.clips.map((c) => `[${c.platform}] ${c.text} (${c.duration})`).join('
                 Try Another File
               </button>
             </div>
+
+            {/* Export panel */}
+            {transcript && (
+              <div className="border border-slate-700 rounded-2xl overflow-hidden">
+                <div className="px-6 py-4 bg-slate-900/80 border-b border-slate-700 flex items-center gap-2">
+                  <Download className="w-4 h-4 text-indigo-400" />
+                  <span className="text-white font-medium">Export Results</span>
+                  <span className="text-xs text-slate-500 ml-auto">TXT · SRT · JSON</span>
+                </div>
+                <div className="px-6 py-5">
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { label: 'TXT', desc: 'Plain text transcript', icon: FileText, fn: downloadTXT },
+                      { label: 'SRT', desc: 'Subtitles for video', icon: ClosedCaptioning, fn: downloadSRT },
+                      { label: 'JSON', desc: 'Structured data', icon: FileJson, fn: downloadJSON },
+                    ].map(({ label, desc, icon: Icon, fn }) => (
+                      <button
+                        key={label}
+                        onClick={fn}
+                        className="flex items-center gap-3 p-4 rounded-xl bg-slate-900/80 border border-slate-700/50 hover:border-indigo-500/50 hover:bg-indigo-500/5 transition group"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-slate-800 group-hover:bg-indigo-500/20 flex items-center justify-center transition">
+                          <Icon className="w-4 h-4 text-slate-400 group-hover:text-indigo-400 transition" />
+                        </div>
+                        <div className="text-left">
+                          <p className="text-white text-sm font-medium">{label}</p>
+                          <p className="text-slate-500 text-xs">{desc}</p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Audio Clips */}
             {extractedClips.length > 0 && (
