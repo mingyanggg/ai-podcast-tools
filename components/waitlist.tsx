@@ -1,116 +1,196 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Mail, Check, Loader2, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { Mail, Check, Loader2, AlertCircle, X } from 'lucide-react';
+
+interface WaitlistSignupProps {
+  source?: string;
+}
 
 export function WaitlistBanner() {
+  return <WaitlistForm source="landing-page" />;
+}
+
+export function WaitlistModal() {
+  return <WaitlistForm source="landing-page" variant="modal" />;
+}
+
+interface WaitlistFormProps {
+  variant?: 'inline' | 'modal';
+  source?: string;
+}
+
+export function WaitlistForm({ variant = 'inline', source = 'website' }: WaitlistFormProps) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
+  const [showModal, setShowModal] = useState(false);
   const [count, setCount] = useState<number | null>(null);
 
-  const fetchCount = useCallback(async () => {
-    try {
-      const res = await fetch('/api/waitlist');
-      const data = await res.json();
-      setCount(data.count ?? 0);
-    } catch {
-      // Silently fail
-    }
-  }, []);
-
   // Fetch count on mount
-  if (count === null) {
-    fetchCount();
-  }
+  useState(() => {
+    if (count === null) {
+      fetch('/api/waitlist')
+        .then((r) => r.json())
+        .then((d) => setCount(d.count ?? 0))
+        .catch(() => {});
+    }
+  });
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!email.trim()) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || !email.includes('@')) {
+      setStatus('error');
+      setMessage('Please enter a valid email address');
+      return;
+    }
 
-      setStatus('loading');
-      setMessage('');
+    setStatus('loading');
 
-      try {
-        const res = await fetch('/api/waitlist', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email }),
-        });
+    try {
+      const res = await fetch('/api/waitlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: email.trim(), source }),
+      });
 
-        const data = await res.json();
+      const data = await res.json();
 
-        if (res.ok) {
-          setStatus('success');
-          setMessage(data.message);
-          setCount(data.count);
-          setEmail('');
-        } else {
-          setStatus('error');
-          setMessage(data.error || 'Something went wrong');
-        }
-      } catch {
-        setStatus('error');
-        setMessage('Failed to join waitlist. Please try again.');
-      }
-    },
-    [email]
-  );
+      if (!res.ok) throw new Error(data.error || 'Failed to join waitlist');
 
-  return (
-    <div className="w-full max-w-xl mx-auto">
-      {status === 'success' ? (
-        <div className="flex items-center justify-center gap-3 px-6 py-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-          <Check className="w-5 h-5 text-emerald-400 flex-shrink-0" />
-          <div>
-            <p className="text-emerald-300 font-medium text-center">{message}</p>
-            {count !== null && (
-              <p className="text-emerald-400/70 text-sm text-center mt-0.5">
-                {count} {count === 1 ? 'person' : 'people'} already waiting
-              </p>
-            )}
-          </div>
+      setStatus('success');
+      setMessage('🎉 You\'re in! 50% lifetime discount — check your email for details.');
+      setCount(data.count);
+      setEmail('');
+    } catch (err) {
+      setStatus('error');
+      setMessage(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+    }
+  };
+
+  const InlineForm = () => (
+    <div>
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (status === 'error') setStatus('idle');
+            }}
+            placeholder="your@email.com"
+            disabled={status === 'loading' || status === 'success'}
+            className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition disabled:opacity-50 text-sm"
+          />
         </div>
-      ) : (
-        <form onSubmit={handleSubmit} className="relative">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <div className="relative flex-1">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="your@email.com"
-                required
-                disabled={status === 'loading'}
-                className="w-full pl-11 pr-4 py-3.5 rounded-full bg-slate-800/60 border border-slate-700 text-white placeholder:text-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 disabled:opacity-50 transition"
-              />
-            </div>
-            <button
-              type="submit"
-              disabled={status === 'loading' || !email.trim()}
-              className="flex items-center justify-center gap-2 px-6 py-3.5 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-sm transition disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {status === 'loading' ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  Join Waitlist <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
-          {status === 'error' && message && (
-            <p className="text-red-400 text-xs mt-2 text-center sm:text-left pl-1">{message}</p>
+        <button
+          type="submit"
+          disabled={status === 'loading' || status === 'success' || !email.trim()}
+          className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium text-sm transition whitespace-nowrap"
+        >
+          {status === 'loading' ? (
+            <><Loader2 className="w-4 h-4 animate-spin" />Joining...</>
+          ) : status === 'success' ? (
+            <><Check className="w-4 h-4" />Joined!</>
+          ) : (
+            <><Mail className="w-4 h-4" />Get 50% Off</>
           )}
-        </form>
+        </button>
+      </form>
+
+      {status === 'error' && message && (
+        <p className="mt-2 text-red-400 text-xs flex items-center gap-1.5">
+          <AlertCircle className="w-3.5 h-3.5" />{message}
+        </p>
+      )}
+      {status === 'success' && message && (
+        <p className="mt-2 text-emerald-400 text-xs">{message}</p>
       )}
       {count !== null && status !== 'success' && (
-        <p className="text-slate-500 text-xs text-center mt-2">
-          Join {count > 0 ? `${count} others already ` : ''}waiting for early access
+        <p className="mt-2 text-slate-500 text-xs">
+          {count > 0 ? `${count} already waiting` : 'Join the waitlist'}
         </p>
       )}
     </div>
   );
+
+  // Modal trigger variant
+  if (variant === 'modal') {
+    return (
+      <>
+        <button
+          onClick={() => setShowModal(true)}
+          className="rounded-full bg-foreground px-6 py-3 text-sm font-medium text-background transition-colors hover:bg-foreground/90"
+        >
+          Join Waitlist
+        </button>
+
+        {showModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowModal(false); }}
+          >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="relative w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700/50 p-8 shadow-2xl">
+              <button onClick={() => setShowModal(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition">
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="text-center mb-6">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-indigo-500/20 flex items-center justify-center mx-auto mb-4">
+                  <Mail className="w-6 h-6 text-indigo-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white mb-2">Get 50% Off Forever</h3>
+                <p className="text-slate-400 text-sm">Join the waitlist and lock in a lifetime 50% discount when we launch.</p>
+              </div>
+
+              {status === 'success' ? (
+                <div className="text-center py-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4">
+                    <Check className="w-6 h-6 text-emerald-400" />
+                  </div>
+                  <p className="text-emerald-300 font-medium mb-2">You&apos;re on the list! 🎉</p>
+                  <p className="text-slate-400 text-sm">{message}</p>
+                  <button onClick={() => setShowModal(false)} className="mt-4 text-slate-500 hover:text-white text-sm transition">Close</button>
+                </div>
+              ) : (
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div className="relative">
+                    <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => { setEmail(e.target.value); if (status === 'error') setStatus('idle'); }}
+                      placeholder="your@email.com"
+                      disabled={status === 'loading'}
+                      className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/60 border border-slate-700/50 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 transition disabled:opacity-50"
+                      autoFocus
+                    />
+                  </div>
+                  {status === 'error' && message && (
+                    <p className="text-red-400 text-xs flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5" />{message}
+                    </p>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={status === 'loading' || !email.trim()}
+                    className="w-full flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white font-medium text-sm transition"
+                  >
+                    {status === 'loading' ? <><Loader2 className="w-4 h-4 animate-spin" />Joining...</> : 'Join the Waitlist'}
+                  </button>
+                  <p className="text-center text-slate-600 text-xs">No spam. Unsubscribe anytime.</p>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  // Inline variant
+  return <InlineForm />;
 }

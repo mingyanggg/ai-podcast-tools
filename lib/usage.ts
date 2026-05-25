@@ -34,18 +34,11 @@ export async function getUserPlan(userId: string): Promise<Plan> {
       return 'free';
     }
 
-    // First get the user's email from auth, then look up subscription tier by email
-    const { supabase } = await import('@/lib/supabase/client');
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user?.email) {
-      return 'free';
-    }
-
+    // Look up the user's subscription tier using their auth UID
     const { data, error } = await serviceRoleClient
       .from('users')
       .select('subscription_tier')
-      .eq('email', user.email)
+      .eq('id', userId)
       .maybeSingle();
 
     if (error) {
